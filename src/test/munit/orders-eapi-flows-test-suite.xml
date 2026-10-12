@@ -1,0 +1,2002 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:munit="http://www.mulesoft.org/schema/mule/munit"
+      xmlns:munit-tools="http://www.mulesoft.org/schema/mule/munit-tools"
+      xmlns:amqp="http://www.mulesoft.org/schema/mule/amqp"
+      xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/munit http://www.mulesoft.org/schema/mule/munit/current/mule-munit.xsd 
+        http://www.mulesoft.org/schema/mule/core
+        http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+        http://www.mulesoft.org/schema/mule/munit
+        http://www.mulesoft.org/schema/mule/munit/current/mule-munit.xsd
+        http://www.mulesoft.org/schema/mule/munit-tools
+        http://www.mulesoft.org/schema/mule/munit-tools/current/mule-munit-tools.xsd
+        http://www.mulesoft.org/schema/mule/amqp
+        http://www.mulesoft.org/schema/mule/amqp/current/mule-amqp.xsd">
+
+    <munit:config name="orders-eapi-flows-test-suite"/>
+
+    <!-- TC-01: POST /api/orders success -->
+    <munit:test
+        name="TC-01-post-create-order-success-202-test"
+        description="Verify POST order flow publishes CREATE command and returns 202 ACCEPTED">
+
+        <munit:behavior>
+
+            <!-- Prevent the test from publishing to the real RabbitMQ queue -->
+            <munit-tools:mock-when
+                doc:name="Mock AMQP Publish"
+                processor="amqp:publish">
+
+                <munit-tools:with-attributes>
+                    <munit-tools:with-attribute
+                        attributeName="doc:name"
+                        whereValue="#['Publish to order.commands']"/>
+                </munit-tools:with-attributes>
+
+                <munit-tools:then-return/>
+
+            </munit-tools:mock-when>
+
+        </munit:behavior>
+
+        <munit:execution>
+
+            <munit:set-event doc:name="Set Valid POST Request">
+
+                <!--
+                    Keep the payload as an Object.
+                    application/java allows payload.field selectors
+                    inside the production DataWeave transform.
+                -->
+                <munit:payload
+                    mediaType="application/java"
+                    value="#[{
+                        customerId: 'CUST-001',
+                        customerName: 'John Doe',
+                        customerEmail: 'john@example.com',
+                        orderDate: '2026-10-11',
+                        productCode: 'PROD-A',
+                        quantity: 2,
+                        unitPrice: 99.99,
+                        currency: 'USD',
+                        shippingAddressLine1: '123 Main St',
+                        shippingAddressLine2: null,
+                        shippingCity: 'New York',
+                        shippingState: 'NY',
+                        shippingPostalCode: '10001',
+                        shippingCountry: 'US'
+                    }]"/>
+
+                <munit:variables>
+                    <munit:variable
+                        key="correlationId"
+                        value="#['corr-tc-01-001']"/>
+                </munit:variables>
+
+            </munit:set-event>
+
+            <flow-ref
+                name="post:\api\orders:application\json:OrderExperienceApiConfig"
+                doc:name="Invoke POST Order Flow"/>
+
+        </munit:execution>
+
+        <munit:validation>
+
+            <munit-tools:assert-that
+                doc:name="Assert correlationId"
+                expression="#[payload.correlationId]"
+                is="#[MunitTools::equalTo('corr-tc-01-001')]"
+                message="Response correlationId must match vars.correlationId"/>
+
+            <munit-tools:assert-that
+                doc:name="Assert ACCEPTED status"
+                expression="#[payload.status]"
+                is="#[MunitTools::equalTo('ACCEPTED')]"
+                message="Response status must be ACCEPTED"/>
+
+            <munit-tools:assert-that
+                doc:name="Assert acceptance message"
+                expression="#[payload.message]"
+                is="#[MunitTools::equalTo('Order creation request has been accepted')]"
+                message="Response message must confirm order creation acceptance"/>
+
+            <munit-tools:assert-that
+                doc:name="Assert HTTP status 202"
+                expression="#[vars.httpStatus]"
+                is="#[MunitTools::equalTo(202)]"
+                message="vars.httpStatus must be 202"/>
+
+            <munit-tools:verify-call
+                doc:name="Verify AMQP Publish Called Once"
+                processor="amqp:publish"
+                times="1">
+
+                <munit-tools:with-attributes>
+                    <munit-tools:with-attribute
+                        attributeName="doc:name"
+                        whereValue="#['Publish to order.commands']"/>
+                </munit-tools:with-attributes>
+
+            </munit-tools:verify-call>
+
+        </munit:validation>
+
+    </munit:test>
+    
+    <!-- TC-02: Verify AMQP publish is called exactly once -->
+    <munit:test
+        name="TC-02-post-amqp-called-once-test"
+        description="Verify a valid POST order request invokes AMQP publish exactly once">
+
+        <munit:behavior>
+
+            <!-- Prevent publishing the message to the real RabbitMQ queue -->
+            <munit-tools:mock-when
+                doc:name="Mock AMQP Publish"
+                processor="amqp:publish">
+
+                <munit-tools:with-attributes>
+                    <munit-tools:with-attribute
+                        attributeName="doc:name"
+                        whereValue="#['Publish to order.commands']"/>
+                </munit-tools:with-attributes>
+
+                <munit-tools:then-return/>
+
+            </munit-tools:mock-when>
+
+        </munit:behavior>
+
+        <munit:execution>
+
+            <munit:set-event doc:name="Set TC-02 POST Event">
+
+                <!--
+                    application/java is intentional.
+                    The payload remains an Object so the production
+                    DataWeave can access payload.customerId,
+                    payload.orderId and the other fields.
+                -->
+                <munit:payload
+                    mediaType="application/java"
+                    value="#[{
+                        customerId: 'CUST-002',
+                        customerName: 'Jane Smith',
+                        customerEmail: 'jane@example.com',
+                        orderDate: '2026-10-11',
+                        productCode: 'PROD-B',
+                        quantity: 1,
+                        unitPrice: 49.99,
+                        currency: 'USD',
+                        shippingAddressLine1: '456 Oak Ave',
+                        shippingAddressLine2: null,
+                        shippingCity: 'Chicago',
+                        shippingState: 'IL',
+                        shippingPostalCode: '60601',
+                        shippingCountry: 'US'
+                    }]"/>
+
+                <munit:variables>
+                    <munit:variable
+                        key="correlationId"
+                        value="#['corr-tc-02-001']"/>
+                </munit:variables>
+
+            </munit:set-event>
+
+            <!-- Invoke the real EAPI POST implementation flow -->
+            <flow-ref
+                name="post:\api\orders:application\json:OrderExperienceApiConfig"
+                doc:name="Invoke POST Order Flow"/>
+
+        </munit:execution>
+
+        <munit:validation>
+
+            <!-- Main purpose of TC-02 -->
+            <munit-tools:verify-call
+                doc:name="Verify AMQP Publish Called Exactly Once"
+                processor="amqp:publish"
+                times="1">
+
+                <munit-tools:with-attributes>
+                    <munit-tools:with-attribute
+                        attributeName="doc:name"
+                        whereValue="#['Publish to order.commands']"/>
+                </munit-tools:with-attributes>
+
+            </munit-tools:verify-call>
+
+            <!-- Confirm that the flow completed successfully -->
+            <munit-tools:assert-that
+                doc:name="Assert ACCEPTED Status"
+                expression="#[payload.status]"
+                is="#[MunitTools::equalTo('ACCEPTED')]"
+                message="POST response status must be ACCEPTED"/>
+
+            <munit-tools:assert-that
+                doc:name="Assert HTTP Status 202"
+                expression="#[vars.httpStatus]"
+                is="#[MunitTools::equalTo(202)]"
+                message="vars.httpStatus must be 202 after successful AMQP publish"/>
+
+            <munit-tools:assert-that
+                doc:name="Assert Correlation ID"
+                expression="#[payload.correlationId]"
+                is="#[MunitTools::equalTo('corr-tc-02-001')]"
+                message="Response correlationId must match vars.correlationId"/>
+
+        </munit:validation>
+
+    </munit:test>
+    <!-- TC-03: POST correlationId propagation -->
+<munit:test
+    name="TC-03-post-correlationid-propagation-test"
+    description="Verify vars.correlationId propagates through the POST flow into the AMQP command and final 202 response">
+
+    <munit:behavior>
+
+        <munit-tools:mock-when
+            doc:name="Mock AMQP Publish"
+            processor="amqp:publish">
+
+            <munit-tools:with-attributes>
+                <munit-tools:with-attribute
+                    attributeName="doc:name"
+                    whereValue="#['Publish to order.commands']"/>
+            </munit-tools:with-attributes>
+
+            <munit-tools:then-return/>
+
+        </munit-tools:mock-when>
+
+    </munit:behavior>
+
+    <munit:execution>
+
+        <munit:set-event doc:name="Set TC-03 POST Event">
+
+            <munit:payload
+                mediaType="application/java"
+                value="#[{
+                    customerId: 'CUST-003',
+                    customerName: 'Alice Brown',
+                    customerEmail: 'alice@example.com',
+                    orderDate: '2026-10-11',
+                    productCode: 'PROD-C',
+                    quantity: 3,
+                    unitPrice: 25.00,
+                    currency: 'GBP',
+                    shippingAddressLine1: '10 Downing St',
+                    shippingAddressLine2: null,
+                    shippingCity: 'London',
+                    shippingState: 'ENG',
+                    shippingPostalCode: 'SW1A2AA',
+                    shippingCountry: 'GB'
+                }]"/>
+
+            <munit:variables>
+                <munit:variable
+                    key="correlationId"
+                    value="#['unique-corr-abc-123']"/>
+            </munit:variables>
+
+        </munit:set-event>
+
+        <flow-ref
+            name="post:\api\orders:application\json:OrderExperienceApiConfig"
+            doc:name="Invoke POST Order Flow"/>
+
+    </munit:execution>
+
+    <munit:validation>
+
+        <!-- Verify the input variable remains available after flow execution -->
+        <munit-tools:assert-that
+            doc:name="Assert Correlation ID Variable"
+            expression="#[vars.correlationId]"
+            is="#[MunitTools::equalTo('unique-corr-abc-123')]"
+            message="vars.correlationId must retain the supplied value"/>
+
+        <!-- Verify correlationId appears in the final response -->
+        <munit-tools:assert-that
+            doc:name="Assert Response Correlation ID"
+            expression="#[payload.correlationId]"
+            is="#[MunitTools::equalTo('unique-corr-abc-123')]"
+            message="Response correlationId must match vars.correlationId"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert ACCEPTED Status"
+            expression="#[payload.status]"
+            is="#[MunitTools::equalTo('ACCEPTED')]"
+            message="Response status must be ACCEPTED"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert Acceptance Message"
+            expression="#[payload.message]"
+            is="#[MunitTools::equalTo('Order creation request has been accepted')]"
+            message="Response message must confirm order creation acceptance"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert HTTP Status 202"
+            expression="#[vars.httpStatus]"
+            is="#[MunitTools::equalTo(202)]"
+            message="vars.httpStatus must be 202"/>
+
+        <!-- Confirm that the AMQP publisher was actually reached -->
+        <munit-tools:verify-call
+            doc:name="Verify AMQP Publish Called Once"
+            processor="amqp:publish"
+            times="1">
+
+            <munit-tools:with-attributes>
+                <munit-tools:with-attribute
+                    attributeName="doc:name"
+                    whereValue="#['Publish to order.commands']"/>
+            </munit-tools:with-attributes>
+
+        </munit-tools:verify-call>
+
+    </munit:validation>
+
+</munit:test>
+
+<!-- TC-04: POST sets vars.httpStatus to 202 -->
+<munit:test
+    name="TC-04-post-httpstatus-var-202-test"
+    description="Verify successful POST order flow sets vars.httpStatus to 202">
+
+    <munit:behavior>
+
+        <munit-tools:mock-when
+            doc:name="Mock AMQP Publish"
+            processor="amqp:publish">
+
+            <munit-tools:with-attributes>
+                <munit-tools:with-attribute
+                    attributeName="doc:name"
+                    whereValue="#['Publish to order.commands']"/>
+            </munit-tools:with-attributes>
+
+            <munit-tools:then-return/>
+
+        </munit-tools:mock-when>
+
+    </munit:behavior>
+
+    <munit:execution>
+
+        <munit:set-event doc:name="Set TC-04 POST Event">
+
+            <munit:payload
+                mediaType="application/java"
+                value="#[{
+                    customerId: 'CUST-004',
+                    customerName: 'Bob Jones',
+                    customerEmail: 'bob@example.com',
+                    orderDate: '2026-10-11',
+                    productCode: 'PROD-D',
+                    quantity: 5,
+                    unitPrice: 10.00,
+                    currency: 'USD',
+                    shippingAddressLine1: '789 Pine Road',
+                    shippingAddressLine2: null,
+                    shippingCity: 'Dallas',
+                    shippingState: 'TX',
+                    shippingPostalCode: '75201',
+                    shippingCountry: 'US'
+                }]"/>
+
+            <munit:variables>
+                <munit:variable
+                    key="correlationId"
+                    value="#['corr-tc-04-001']"/>
+            </munit:variables>
+
+        </munit:set-event>
+
+        <flow-ref
+            name="post:\api\orders:application\json:OrderExperienceApiConfig"
+            doc:name="Invoke POST Order Flow"/>
+
+    </munit:execution>
+
+    <munit:validation>
+
+        <munit-tools:assert-that
+            doc:name="Assert HTTP Status 202"
+            expression="#[vars.httpStatus]"
+            is="#[MunitTools::equalTo(202)]"
+            message="vars.httpStatus must be 202 after successful POST processing"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert Response Status"
+            expression="#[payload.status]"
+            is="#[MunitTools::equalTo('ACCEPTED')]"
+            message="Response status must be ACCEPTED"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert Response Message"
+            expression="#[payload.message]"
+            is="#[MunitTools::equalTo('Order creation request has been accepted')]"
+            message="Response message must confirm order creation acceptance"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert Response Correlation ID"
+            expression="#[payload.correlationId]"
+            is="#[MunitTools::equalTo('corr-tc-04-001')]"
+            message="Response correlationId must match vars.correlationId"/>
+
+        <munit-tools:verify-call
+            doc:name="Verify AMQP Publish Called Once"
+            processor="amqp:publish"
+            times="1">
+
+            <munit-tools:with-attributes>
+                <munit-tools:with-attribute
+                    attributeName="doc:name"
+                    whereValue="#['Publish to order.commands']"/>
+            </munit-tools:with-attributes>
+
+        </munit-tools:verify-call>
+
+    </munit:validation>
+
+</munit:test>
+
+<!-- TC-05: Validate AMQP CREATE command payload before publishing -->
+<munit:test
+    name="TC-05-post-amqp-command-spy-test"
+    description="Verify the POST flow builds the correct CREATE command before AMQP publishing">
+
+    <munit:behavior>
+
+        <munit-tools:mock-when
+            doc:name="Mock AMQP Publish"
+            processor="amqp:publish">
+
+            <munit-tools:with-attributes>
+                <munit-tools:with-attribute
+                    attributeName="doc:name"
+                    whereValue="#['Publish to order.commands']"/>
+            </munit-tools:with-attributes>
+
+            <munit-tools:then-return/>
+
+        </munit-tools:mock-when>
+
+        <munit-tools:spy
+            doc:name="Spy AMQP CREATE Command"
+            processor="amqp:publish">
+
+            <munit-tools:with-attributes>
+                <munit-tools:with-attribute
+                    attributeName="doc:name"
+                    whereValue="#['Publish to order.commands']"/>
+            </munit-tools:with-attributes>
+
+            <munit-tools:before-call>
+
+                <munit-tools:assert-that
+                    doc:name="Assert AMQP Operation"
+                    expression="#[payload.operation]"
+                    is="#[MunitTools::equalTo('CREATE')]"
+                    message="AMQP command operation must be CREATE"/>
+
+                <munit-tools:assert-that
+                    doc:name="Assert AMQP Source"
+                    expression="#[payload.source]"
+                    is="#[MunitTools::equalTo('API')]"
+                    message="AMQP command source must be API"/>
+
+                <munit-tools:assert-that
+                    doc:name="Assert AMQP Correlation ID"
+                    expression="#[payload.correlationId]"
+                    is="#[MunitTools::equalTo('corr-tc-05-001')]"
+                    message="AMQP command must contain the correct correlationId"/>
+
+                <munit-tools:assert-that
+                    doc:name="Assert AMQP Customer ID"
+                    expression="#[payload.customerId]"
+                    is="#[MunitTools::equalTo('CUST-005')]"
+                    message="AMQP command must contain the correct customerId"/>
+
+                <munit-tools:assert-that
+                    doc:name="Assert AMQP Customer Name"
+                    expression="#[payload.customerName]"
+                    is="#[MunitTools::equalTo('Carol White')]"
+                    message="AMQP command must contain the correct customerName"/>
+
+                <munit-tools:assert-that
+                    doc:name="Assert AMQP Product Code"
+                    expression="#[payload.productCode]"
+                    is="#[MunitTools::equalTo('PROD-E')]"
+                    message="AMQP command must contain the correct productCode"/>
+
+                <munit-tools:assert-that
+                    doc:name="Assert AMQP Quantity"
+                    expression="#[payload.quantity]"
+                    is="#[MunitTools::equalTo(1)]"
+                    message="AMQP command quantity must be 1"/>
+
+                <munit-tools:assert-that
+                    doc:name="Assert AMQP Unit Price"
+                    expression="#[payload.unitPrice]"
+                    is="#[MunitTools::equalTo(199.99)]"
+                    message="AMQP command unitPrice must be 199.99"/>
+
+            </munit-tools:before-call>
+
+        </munit-tools:spy>
+
+    </munit:behavior>
+
+    <munit:execution>
+
+        <munit:set-event doc:name="Set TC-05 POST Event">
+
+            <munit:payload
+                mediaType="application/java"
+                value="#[{
+                    customerId: 'CUST-005',
+                    customerName: 'Carol White',
+                    customerEmail: 'carol@example.com',
+                    orderDate: '2026-10-11',
+                    productCode: 'PROD-E',
+                    quantity: 1,
+                    unitPrice: 199.99,
+                    currency: 'EUR',
+                    shippingAddressLine1: 'Rue de Paris 1',
+                    shippingAddressLine2: null,
+                    shippingCity: 'Paris',
+                    shippingState: 'IDF',
+                    shippingPostalCode: '75001',
+                    shippingCountry: 'FR'
+                }]"/>
+
+            <munit:variables>
+                <munit:variable
+                    key="correlationId"
+                    value="#['corr-tc-05-001']"/>
+            </munit:variables>
+
+        </munit:set-event>
+
+        <flow-ref
+            name="post:\api\orders:application\json:OrderExperienceApiConfig"
+            doc:name="Invoke POST Order Flow"/>
+
+    </munit:execution>
+
+    <munit:validation>
+
+        <munit-tools:assert-that
+            doc:name="Assert Response Correlation ID"
+            expression="#[payload.correlationId]"
+            is="#[MunitTools::equalTo('corr-tc-05-001')]"
+            message="Response correlationId must match vars.correlationId"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert ACCEPTED Status"
+            expression="#[payload.status]"
+            is="#[MunitTools::equalTo('ACCEPTED')]"
+            message="Flow must return ACCEPTED after AMQP command validation"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert Acceptance Message"
+            expression="#[payload.message]"
+            is="#[MunitTools::equalTo('Order creation request has been accepted')]"
+            message="Response message must confirm order creation acceptance"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert HTTP Status 202"
+            expression="#[vars.httpStatus]"
+            is="#[MunitTools::equalTo(202)]"
+            message="vars.httpStatus must be 202"/>
+
+        <munit-tools:verify-call
+            doc:name="Verify AMQP Publish Called Once"
+            processor="amqp:publish"
+            times="1">
+
+            <munit-tools:with-attributes>
+                <munit-tools:with-attribute
+                    attributeName="doc:name"
+                    whereValue="#['Publish to order.commands']"/>
+            </munit-tools:with-attributes>
+
+        </munit-tools:verify-call>
+
+    </munit:validation>
+
+</munit:test>
+
+<!-- TC-06: POST response structure validation -->
+<munit:test
+    name="TC-06-post-response-structure-test"
+    description="Verify the successful POST response contains correlationId, status, and message">
+
+    <munit:behavior>
+
+        <munit-tools:mock-when
+            doc:name="Mock AMQP Publish"
+            processor="amqp:publish">
+
+            <munit-tools:with-attributes>
+                <munit-tools:with-attribute
+                    attributeName="doc:name"
+                    whereValue="#['Publish to order.commands']"/>
+            </munit-tools:with-attributes>
+
+            <munit-tools:then-return/>
+
+        </munit-tools:mock-when>
+
+    </munit:behavior>
+
+    <munit:execution>
+
+        <munit:set-event doc:name="Set TC-06 POST Event">
+
+            <munit:payload
+                mediaType="application/java"
+                value="#[{
+                    customerId: 'CUST-006',
+                    customerName: 'David Lee',
+                    customerEmail: 'david@example.com',
+                    orderDate: '2026-10-11',
+                    productCode: 'PROD-F',
+                    quantity: 4,
+                    unitPrice: 55.50,
+                    currency: 'CAD',
+                    shippingAddressLine1: '100 King Street',
+                    shippingAddressLine2: null,
+                    shippingCity: 'Toronto',
+                    shippingState: 'ON',
+                    shippingPostalCode: 'M5X1A4',
+                    shippingCountry: 'CA'
+                }]"/>
+
+            <munit:variables>
+                <munit:variable
+                    key="correlationId"
+                    value="#['corr-tc-06-001']"/>
+            </munit:variables>
+
+        </munit:set-event>
+
+        <flow-ref
+            name="post:\api\orders:application\json:OrderExperienceApiConfig"
+            doc:name="Invoke POST Order Flow"/>
+
+    </munit:execution>
+
+    <munit:validation>
+
+        <munit-tools:assert-that
+            doc:name="Assert Response Is Not Null"
+            expression="#[payload]"
+            is="#[MunitTools::notNullValue()]"
+            message="POST response payload must not be null"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert Response Is Object"
+            expression="#[payload is Object]"
+            is="#[MunitTools::equalTo(true)]"
+            message="POST response payload must be an Object"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert Correlation ID Exists"
+            expression="#[payload.correlationId]"
+            is="#[MunitTools::notNullValue()]"
+            message="Response must contain correlationId"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert Correlation ID Value"
+            expression="#[payload.correlationId]"
+            is="#[MunitTools::equalTo('corr-tc-06-001')]"
+            message="Response correlationId must match vars.correlationId"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert Status Exists"
+            expression="#[payload.status]"
+            is="#[MunitTools::notNullValue()]"
+            message="Response must contain status"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert Status Value"
+            expression="#[payload.status]"
+            is="#[MunitTools::equalTo('ACCEPTED')]"
+            message="Response status must be ACCEPTED"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert Message Exists"
+            expression="#[payload.message]"
+            is="#[MunitTools::notNullValue()]"
+            message="Response must contain message"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert Message Value"
+            expression="#[payload.message]"
+            is="#[MunitTools::equalTo('Order creation request has been accepted')]"
+            message="Response message must confirm order creation acceptance"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert HTTP Status 202"
+            expression="#[vars.httpStatus]"
+            is="#[MunitTools::equalTo(202)]"
+            message="vars.httpStatus must be 202"/>
+
+        <munit-tools:verify-call
+            doc:name="Verify AMQP Publish Called Once"
+            processor="amqp:publish"
+            times="1">
+
+            <munit-tools:with-attributes>
+                <munit-tools:with-attribute
+                    attributeName="doc:name"
+                    whereValue="#['Publish to order.commands']"/>
+            </munit-tools:with-attributes>
+
+        </munit-tools:verify-call>
+
+    </munit:validation>
+
+</munit:test>
+
+<!-- TC-08: PUT order success path -->
+<munit:test
+    name="TC-08-put-update-order-success-test"
+    description="Cover the complete PUT order flow including orderId, UPDATE command, AMQP publish, and 202 response">
+
+    <munit:behavior>
+
+        <munit-tools:mock-when
+            doc:name="Mock PUT AMQP Publish"
+            processor="amqp:publish">
+
+            <munit-tools:with-attributes>
+                <munit-tools:with-attribute
+                    attributeName="doc:name"
+                    whereValue="#['Publish to order.commands']"/>
+            </munit-tools:with-attributes>
+
+            <munit-tools:then-return/>
+
+        </munit-tools:mock-when>
+
+    </munit:behavior>
+
+    <munit:execution>
+
+        <munit:set-event doc:name="Set PUT Order Event">
+
+            <!-- Keep payload as Object for payload.field selectors -->
+            <munit:payload
+                mediaType="application/java"
+                value="#[{
+                    customerName: 'Updated Customer',
+                    customerEmail: 'updated@example.com',
+                    quantity: 5,
+                    unitPrice: 89.99,
+                    shippingAddressLine1: '200 Update Boulevard',
+                    shippingAddressLine2: null,
+                    shippingCity: 'Austin',
+                    shippingState: 'TX',
+                    shippingPostalCode: '73301',
+                    shippingCountry: 'US'
+                }]"/>
+
+            <!-- PUT production flow reads attributes.uriParams.orderId -->
+            <munit:attributes
+                mediaType="application/java"
+                value="#[{
+                    uriParams: {
+                        orderId: 'ORD-MUNIT-PUT-001'
+                    },
+                    headers: {
+                        'content-type': 'application/json'
+                    },
+                    queryParams: {}
+                }]"/>
+
+            <munit:variables>
+                <munit:variable
+                    key="correlationId"
+                    value="#['corr-put-001']"/>
+            </munit:variables>
+
+        </munit:set-event>
+
+        <flow-ref
+            name="put:\api\orders\(orderId):application\json:OrderExperienceApiConfig"
+            doc:name="Invoke PUT Order Flow"/>
+
+    </munit:execution>
+
+    <munit:validation>
+
+        <!-- Covers the Set orderId processor -->
+        <munit-tools:assert-that
+            doc:name="Assert orderId Variable"
+            expression="#[vars.orderId]"
+            is="#[MunitTools::equalTo('ORD-MUNIT-PUT-001')]"
+            message="vars.orderId must be populated from attributes.uriParams.orderId"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert Response orderId"
+            expression="#[payload.orderId]"
+            is="#[MunitTools::equalTo('ORD-MUNIT-PUT-001')]"
+            message="Response orderId must match the URI parameter"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert Response Correlation ID"
+            expression="#[payload.correlationId]"
+            is="#[MunitTools::equalTo('corr-put-001')]"
+            message="Response correlationId must match vars.correlationId"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert ACCEPTED Status"
+            expression="#[payload.status]"
+            is="#[MunitTools::equalTo('ACCEPTED')]"
+            message="PUT response status must be ACCEPTED"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert Update Acceptance Message"
+            expression="#[payload.message]"
+            is="#[MunitTools::equalTo('Order update request has been accepted')]"
+            message="PUT response message must confirm update acceptance"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert HTTP Status 202"
+            expression="#[vars.httpStatus]"
+            is="#[MunitTools::equalTo(202)]"
+            message="vars.httpStatus must be 202"/>
+
+        <munit-tools:verify-call
+            doc:name="Verify PUT AMQP Publish Called Once"
+            processor="amqp:publish"
+            times="1">
+
+            <munit-tools:with-attributes>
+                <munit-tools:with-attribute
+                    attributeName="doc:name"
+                    whereValue="#['Publish to order.commands']"/>
+            </munit-tools:with-attributes>
+
+        </munit-tools:verify-call>
+
+    </munit:validation>
+
+</munit:test>
+
+<!-- TC-09: DELETE order success path -->
+<munit:test
+    name="TC-09-delete-order-success-test"
+    description="Cover the complete DELETE order flow including orderId, DELETE command, AMQP publish, and 202 response">
+
+    <munit:behavior>
+
+        <munit-tools:mock-when
+            doc:name="Mock DELETE AMQP Publish"
+            processor="amqp:publish">
+
+            <munit-tools:with-attributes>
+                <munit-tools:with-attribute
+                    attributeName="doc:name"
+                    whereValue="#['Publish to order.commands']"/>
+            </munit-tools:with-attributes>
+
+            <munit-tools:then-return/>
+
+        </munit-tools:mock-when>
+
+    </munit:behavior>
+
+    <munit:execution>
+
+        <munit:set-event doc:name="Set DELETE Order Event">
+
+            <munit:payload
+                mediaType="application/java"
+                value="#[{
+                    customerEmail: 'delete.customer@example.com',
+                    customerName: 'Delete Customer'
+                }]"/>
+
+            <munit:attributes
+                mediaType="application/java"
+                value="#[{
+                    uriParams: {
+                        orderId: 'ORD-MUNIT-DELETE-001'
+                    },
+                    headers: {
+                        'content-type': 'application/json',
+                        customerEmail: 'delete.customer@example.com',
+                        customerName: 'Delete Customer'
+                    },
+                    queryParams: {}
+                }]"/>
+
+            <munit:variables>
+                <munit:variable
+                    key="correlationId"
+                    value="#['corr-delete-001']"/>
+            </munit:variables>
+
+        </munit:set-event>
+
+        <flow-ref
+            name="delete:\api\orders\(orderId):OrderExperienceApiConfig"
+            doc:name="Invoke DELETE Order Flow"/>
+
+    </munit:execution>
+
+    <munit:validation>
+
+        <munit-tools:assert-that
+            doc:name="Assert DELETE orderId Variable"
+            expression="#[vars.orderId]"
+            is="#[MunitTools::equalTo('ORD-MUNIT-DELETE-001')]"
+            message="vars.orderId must be populated from attributes.uriParams.orderId"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert DELETE Response orderId"
+            expression="#[payload.orderId]"
+            is="#[MunitTools::equalTo('ORD-MUNIT-DELETE-001')]"
+            message="DELETE response orderId must match the URI parameter"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert DELETE Correlation ID"
+            expression="#[payload.correlationId]"
+            is="#[MunitTools::equalTo('corr-delete-001')]"
+            message="DELETE response correlationId must match vars.correlationId"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert DELETE Status"
+            expression="#[payload.status]"
+            is="#[MunitTools::equalTo('ACCEPTED')]"
+            message="DELETE response status must be ACCEPTED"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert DELETE Message"
+            expression="#[payload.message]"
+            is="#[MunitTools::equalTo('Order deletion request has been accepted')]"
+            message="DELETE response message must confirm deletion acceptance"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert DELETE HTTP Status"
+            expression="#[vars.httpStatus]"
+            is="#[MunitTools::equalTo(202)]"
+            message="vars.httpStatus must be 202 after successful DELETE processing"/>
+
+        <munit-tools:verify-call
+            doc:name="Verify DELETE AMQP Publish Called Once"
+            processor="amqp:publish"
+            times="1">
+
+            <munit-tools:with-attributes>
+                <munit-tools:with-attribute
+                    attributeName="doc:name"
+                    whereValue="#['Publish to order.commands']"/>
+            </munit-tools:with-attributes>
+
+        </munit-tools:verify-call>
+
+    </munit:validation>
+
+</munit:test>
+
+<!-- TC-10: Cover ordersEapiMainFlow with correlationId from request header -->
+<munit:test
+    name="TC-10-main-flow-correlationid-from-header-test"
+    description="Cover Set correlationId and APIKit Router in ordersEapiMainFlow using x-correlation-id header">
+
+    <munit:behavior>
+
+        <munit-tools:mock-when
+            doc:name="Mock APIKit Router"
+            processor="apikit:router">
+
+            <munit-tools:with-attributes>
+                <munit-tools:with-attribute
+                    attributeName="config-ref"
+                    whereValue="#['OrderExperienceApiConfig']"/>
+            </munit-tools:with-attributes>
+
+            <munit-tools:then-return/>
+
+        </munit-tools:mock-when>
+
+    </munit:behavior>
+
+    <munit:execution>
+
+        <munit:set-event doc:name="Set Main Flow HTTP Event">
+
+            <munit:payload
+                mediaType="application/java"
+                value="#[{}]"/>
+
+            <munit:attributes
+                mediaType="application/java"
+                value="#[{
+                    headers: {
+                        'x-correlation-id': 'corr-main-flow-001',
+                        'content-type': 'application/json'
+                    },
+                    uriParams: {},
+                    queryParams: {},
+                    method: 'POST',
+                    requestPath: '/api/orders',
+                    relativePath: '/api/orders',
+                    listenerPath: '/*'
+                }]"/>
+
+        </munit:set-event>
+
+        <flow-ref
+            name="ordersEapiMainFlow"
+            doc:name="Invoke ordersEapiMainFlow"/>
+
+    </munit:execution>
+
+    <munit:validation>
+
+        <munit-tools:assert-that
+            doc:name="Assert Correlation ID From Header"
+            expression="#[vars.correlationId]"
+            is="#[MunitTools::equalTo('corr-main-flow-001')]"
+            message="vars.correlationId must be populated from the x-correlation-id request header"/>
+
+        <munit-tools:verify-call
+            doc:name="Verify APIKit Router Called Once"
+            processor="apikit:router"
+            times="1">
+
+            <munit-tools:with-attributes>
+                <munit-tools:with-attribute
+                    attributeName="config-ref"
+                    whereValue="#['OrderExperienceApiConfig']"/>
+            </munit-tools:with-attributes>
+
+        </munit-tools:verify-call>
+
+    </munit:validation>
+
+</munit:test>
+
+<!-- TC-11: Cover APIKIT:BAD_REQUEST branch in globalErrorHandler -->
+<munit:test
+    name="TC-11-main-flow-bad-request-error-test"
+    description="Cover APIKIT BAD_REQUEST handling and verify the generated 400 error response"
+    expectedErrorType="APIKIT:BAD_REQUEST">
+
+    <munit:behavior>
+
+        <munit-tools:mock-when
+            doc:name="Mock APIKit BAD_REQUEST"
+            processor="apikit:router">
+
+            <munit-tools:with-attributes>
+                <munit-tools:with-attribute
+                    attributeName="config-ref"
+                    whereValue="#['OrderExperienceApiConfig']"/>
+            </munit-tools:with-attributes>
+
+            <munit-tools:then-return>
+                <munit-tools:error typeId="APIKIT:BAD_REQUEST"/>
+            </munit-tools:then-return>
+
+        </munit-tools:mock-when>
+
+    </munit:behavior>
+
+    <munit:execution>
+
+        <munit:set-event doc:name="Set BAD_REQUEST HTTP Event">
+
+            <munit:payload
+                mediaType="application/java"
+                value="#[{
+                    productCode: 'PROD-INVALID'
+                }]"/>
+
+            <munit:attributes
+                mediaType="application/java"
+                value="#[{
+                    headers: {
+                        'x-correlation-id': 'corr-bad-request-001',
+                        'content-type': 'application/json'
+                    },
+                    uriParams: {},
+                    queryParams: {},
+                    method: 'POST',
+                    requestPath: '/api/orders',
+                    relativePath: '/api/orders',
+                    listenerPath: '/*'
+                }]"/>
+
+        </munit:set-event>
+
+        <flow-ref
+            name="ordersEapiMainFlow"
+            doc:name="Invoke ordersEapiMainFlow"/>
+
+    </munit:execution>
+
+    <munit:validation>
+
+        <munit-tools:assert-that
+            doc:name="Assert BAD_REQUEST Error Code"
+            expression="#[payload.errorCode]"
+            is="#[MunitTools::equalTo('BAD_REQUEST')]"
+            message="errorCode must be BAD_REQUEST"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert EAPI Error Source"
+            expression="#[payload.source]"
+            is="#[MunitTools::equalTo('EAPI')]"
+            message="Error source must be EAPI"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert Error Correlation ID"
+            expression="#[payload.correlationId]"
+            is="#[MunitTools::equalTo('corr-bad-request-001')]"
+            message="Error response must preserve the request correlationId"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert Error Message Exists"
+            expression="#[payload.errorMessage]"
+            is="#[MunitTools::notNullValue()]"
+            message="BAD_REQUEST response must contain errorMessage"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert Error Timestamp Exists"
+            expression="#[payload.timestamp]"
+            is="#[MunitTools::notNullValue()]"
+            message="BAD_REQUEST response must contain timestamp"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert HTTP Status 400"
+            expression="#[vars.httpStatus]"
+            is="#[MunitTools::equalTo(400)]"
+            message="vars.httpStatus must be 400"/>
+
+        <munit-tools:verify-call
+            doc:name="Verify APIKit Router Called Once"
+            processor="apikit:router"
+            times="1">
+
+            <munit-tools:with-attributes>
+                <munit-tools:with-attribute
+                    attributeName="config-ref"
+                    whereValue="#['OrderExperienceApiConfig']"/>
+            </munit-tools:with-attributes>
+
+        </munit-tools:verify-call>
+
+    </munit:validation>
+
+</munit:test>
+
+<!-- TC-12: Cover APIKIT:NOT_FOUND branch in globalErrorHandler -->
+<munit:test
+    name="TC-12-main-flow-not-found-error-test"
+    description="Cover APIKIT NOT_FOUND handling and verify the generated 404 error response">
+
+    <munit:behavior>
+
+        <munit-tools:mock-when
+            doc:name="Mock APIKit NOT_FOUND"
+            processor="apikit:router">
+
+            <munit-tools:with-attributes>
+                <munit-tools:with-attribute
+                    attributeName="config-ref"
+                    whereValue="#['OrderExperienceApiConfig']"/>
+            </munit-tools:with-attributes>
+
+            <munit-tools:then-return>
+                <munit-tools:error typeId="APIKIT:NOT_FOUND"/>
+            </munit-tools:then-return>
+
+        </munit-tools:mock-when>
+
+    </munit:behavior>
+
+    <munit:execution>
+
+        <munit:set-event doc:name="Set NOT_FOUND HTTP Event">
+
+            <munit:payload
+                mediaType="application/java"
+                value="#[{}]"/>
+
+            <munit:attributes
+                mediaType="application/java"
+                value="#[{
+                    headers: {
+                        'x-correlation-id': 'corr-not-found-001',
+                        'content-type': 'application/json'
+                    },
+                    uriParams: {},
+                    queryParams: {},
+                    method: 'GET',
+                    requestPath: '/api/unknown',
+                    relativePath: '/api/unknown',
+                    listenerPath: '/*'
+                }]"/>
+
+        </munit:set-event>
+
+        <!--
+            globalErrorHandler uses on-error-propagate, so the transformed
+            error must be consumed at the MUnit test level before validation.
+        -->
+        <try doc:name="Invoke Main Flow and Capture Propagated Error">
+
+            <flow-ref
+                name="ordersEapiMainFlow"
+                doc:name="Invoke ordersEapiMainFlow"/>
+
+            <error-handler>
+                <on-error-continue
+                    type="APIKIT:NOT_FOUND"
+                    doc:name="Capture Propagated NOT_FOUND Error"/>
+            </error-handler>
+
+        </try>
+
+    </munit:execution>
+
+    <munit:validation>
+
+        <munit-tools:assert-that
+            doc:name="Assert RESOURCE_NOT_FOUND Error Code"
+            expression="#[payload.errorCode]"
+            is="#[MunitTools::equalTo('RESOURCE_NOT_FOUND')]"
+            message="errorCode must be RESOURCE_NOT_FOUND"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert NOT_FOUND Error Message"
+            expression="#[payload.errorMessage]"
+            is="#[MunitTools::equalTo('The requested URI or resource does not exist.')]"
+            message="errorMessage must match the global error-handler output"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert EAPI Error Source"
+            expression="#[payload.source]"
+            is="#[MunitTools::equalTo('EAPI')]"
+            message="Error source must be EAPI"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert Error Correlation ID"
+            expression="#[payload.correlationId]"
+            is="#[MunitTools::equalTo('corr-not-found-001')]"
+            message="Error response must preserve the request correlationId"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert Error Timestamp Exists"
+            expression="#[payload.timestamp]"
+            is="#[MunitTools::notNullValue()]"
+            message="NOT_FOUND response must contain timestamp"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert HTTP Status 404"
+            expression="#[vars.httpStatus]"
+            is="#[MunitTools::equalTo(404)]"
+            message="vars.httpStatus must be 404"/>
+
+        <munit-tools:verify-call
+            doc:name="Verify APIKit Router Called Once"
+            processor="apikit:router"
+            times="1">
+
+            <munit-tools:with-attributes>
+                <munit-tools:with-attribute
+                    attributeName="config-ref"
+                    whereValue="#['OrderExperienceApiConfig']"/>
+            </munit-tools:with-attributes>
+
+        </munit-tools:verify-call>
+
+    </munit:validation>
+
+</munit:test>
+
+<!-- TC-13: Cover APIKIT:METHOD_NOT_ALLOWED branch in globalErrorHandler -->
+<munit:test
+    name="TC-13-main-flow-method-not-allowed-error-test"
+    description="Cover APIKIT METHOD_NOT_ALLOWED handling and verify the generated 405 error response">
+
+    <munit:behavior>
+
+        <munit-tools:mock-when
+            doc:name="Mock APIKit METHOD_NOT_ALLOWED"
+            processor="apikit:router">
+
+            <munit-tools:with-attributes>
+                <munit-tools:with-attribute
+                    attributeName="config-ref"
+                    whereValue="#['OrderExperienceApiConfig']"/>
+            </munit-tools:with-attributes>
+
+            <munit-tools:then-return>
+                <munit-tools:error typeId="APIKIT:METHOD_NOT_ALLOWED"/>
+            </munit-tools:then-return>
+
+        </munit-tools:mock-when>
+
+    </munit:behavior>
+
+    <munit:execution>
+
+        <munit:set-event doc:name="Set METHOD_NOT_ALLOWED HTTP Event">
+
+            <munit:payload
+                mediaType="application/java"
+                value="#[{}]"/>
+
+            <munit:attributes
+                mediaType="application/java"
+                value="#[{
+                    headers: {
+                        'x-correlation-id': 'corr-method-not-allowed-001',
+                        'content-type': 'application/json'
+                    },
+                    uriParams: {},
+                    queryParams: {},
+                    method: 'PATCH',
+                    requestPath: '/api/orders',
+                    relativePath: '/api/orders',
+                    listenerPath: '/*'
+                }]"/>
+
+        </munit:set-event>
+
+        <try doc:name="Invoke Main Flow and Capture METHOD_NOT_ALLOWED">
+
+            <flow-ref
+                name="ordersEapiMainFlow"
+                doc:name="Invoke ordersEapiMainFlow"/>
+
+            <error-handler>
+                <on-error-continue
+                    type="APIKIT:METHOD_NOT_ALLOWED"
+                    doc:name="Capture Propagated METHOD_NOT_ALLOWED Error"/>
+            </error-handler>
+
+        </try>
+
+    </munit:execution>
+
+    <munit:validation>
+
+        <munit-tools:assert-that
+            doc:name="Assert METHOD_NOT_ALLOWED Error Code"
+            expression="#[payload.errorCode]"
+            is="#[MunitTools::equalTo('METHOD_NOT_ALLOWED')]"
+            message="errorCode must be METHOD_NOT_ALLOWED"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert METHOD_NOT_ALLOWED Error Message"
+            expression="#[payload.errorMessage]"
+            is="#[MunitTools::equalTo('HTTP method is not allowed on this endpoint.')]"
+            message="errorMessage must match the global error-handler output"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert EAPI Error Source"
+            expression="#[payload.source]"
+            is="#[MunitTools::equalTo('EAPI')]"
+            message="Error source must be EAPI"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert Error Correlation ID"
+            expression="#[payload.correlationId]"
+            is="#[MunitTools::equalTo('corr-method-not-allowed-001')]"
+            message="Error response must preserve the request correlationId"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert Error Timestamp Exists"
+            expression="#[payload.timestamp]"
+            is="#[MunitTools::notNullValue()]"
+            message="METHOD_NOT_ALLOWED response must contain timestamp"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert HTTP Status 405"
+            expression="#[vars.httpStatus]"
+            is="#[MunitTools::equalTo(405)]"
+            message="vars.httpStatus must be 405"/>
+
+        <munit-tools:verify-call
+            doc:name="Verify APIKit Router Called Once"
+            processor="apikit:router"
+            times="1">
+
+            <munit-tools:with-attributes>
+                <munit-tools:with-attribute
+                    attributeName="config-ref"
+                    whereValue="#['OrderExperienceApiConfig']"/>
+            </munit-tools:with-attributes>
+
+        </munit-tools:verify-call>
+
+    </munit:validation>
+
+</munit:test>
+
+<!-- TC-14: APIKIT UNSUPPORTED_MEDIA_TYPE error-handler coverage -->
+<munit:test
+    name="TC-14-main-flow-unsupported-media-type-error-test"
+    description="Cover APIKIT UNSUPPORTED_MEDIA_TYPE branch and verify complete 415 error response">
+
+    <munit:behavior>
+
+        <munit-tools:mock-when
+            doc:name="Mock APIKit Unsupported Media Type"
+            processor="apikit:router">
+
+            <munit-tools:with-attributes>
+                <munit-tools:with-attribute
+                    attributeName="config-ref"
+                    whereValue="#['OrderExperienceApiConfig']"/>
+            </munit-tools:with-attributes>
+
+            <munit-tools:then-return>
+                <munit-tools:error
+                    typeId="APIKIT:UNSUPPORTED_MEDIA_TYPE"/>
+            </munit-tools:then-return>
+
+        </munit-tools:mock-when>
+
+    </munit:behavior>
+
+    <munit:execution>
+
+        <munit:set-event doc:name="Set Unsupported Media Type Event">
+
+            <munit:payload
+                mediaType="application/java"
+                value="#[{
+                    customerId: 'CUST-014'
+                }]"/>
+
+            <munit:attributes
+                mediaType="application/java"
+                value="#[{
+                    headers: {
+                        'x-correlation-id': 'corr-unsupported-media-001',
+                        'content-type': 'text/plain'
+                    },
+                    uriParams: {},
+                    queryParams: {},
+                    method: 'POST',
+                    requestPath: '/api/orders',
+                    relativePath: '/api/orders',
+                    listenerPath: '/*'
+                }]"/>
+
+        </munit:set-event>
+
+        <!--
+            ordersEapiMainFlow already references globalErrorHandler.
+            The inner production handler transforms the error and propagates it.
+            This test-level try consumes the propagated error so validation runs.
+        -->
+        <try doc:name="Execute Main Flow and Capture Propagated Error">
+
+            <flow-ref
+                name="ordersEapiMainFlow"
+                doc:name="Invoke ordersEapiMainFlow"/>
+
+            <error-handler>
+
+                <on-error-continue
+                    type="APIKIT:UNSUPPORTED_MEDIA_TYPE"
+                    doc:name="Capture Unsupported Media Type Error"/>
+
+            </error-handler>
+
+        </try>
+
+    </munit:execution>
+
+    <munit:validation>
+
+        <munit-tools:assert-that
+            doc:name="Assert Correlation ID"
+            expression="#[payload.correlationId]"
+            is="#[MunitTools::equalTo('corr-unsupported-media-001')]"
+            message="Error response must preserve the correlationId"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert Order ID Is Null"
+            expression="#[payload.orderId]"
+            is="#[MunitTools::nullValue()]"
+            message="orderId must be null because no orderId was provided"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert Error Code"
+            expression="#[payload.errorCode]"
+            is="#[MunitTools::equalTo('UNSUPPORTED_MEDIA_TYPE')]"
+            message="errorCode must be UNSUPPORTED_MEDIA_TYPE"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert Error Message"
+            expression="#[payload.errorMessage]"
+            is="#[MunitTools::equalTo('Content-Type is not supported. Please use application/json.')]"
+            message="errorMessage must match the global error-handler output"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert Error Source"
+            expression="#[payload.source]"
+            is="#[MunitTools::equalTo('EAPI')]"
+            message="Error source must be EAPI"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert Timestamp Exists"
+            expression="#[payload.timestamp]"
+            is="#[MunitTools::notNullValue()]"
+            message="Error response must contain timestamp"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert HTTP Status 415"
+            expression="#[vars.httpStatus]"
+            is="#[MunitTools::equalTo(415)]"
+            message="vars.httpStatus must be 415"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert Correlation ID Variable"
+            expression="#[vars.correlationId]"
+            is="#[MunitTools::equalTo('corr-unsupported-media-001')]"
+            message="vars.correlationId must be set from the request header"/>
+
+        <munit-tools:verify-call
+            doc:name="Verify APIKit Router Called Once"
+            processor="apikit:router"
+            times="1">
+
+            <munit-tools:with-attributes>
+                <munit-tools:with-attribute
+                    attributeName="config-ref"
+                    whereValue="#['OrderExperienceApiConfig']"/>
+            </munit-tools:with-attributes>
+
+        </munit-tools:verify-call>
+
+    </munit:validation>
+
+</munit:test>
+<!-- TC-15: AMQP CONNECTIVITY error-handler coverage -->
+<munit:test
+    name="TC-15-post-amqp-connectivity-error-test"
+    description="Cover AMQP CONNECTIVITY branch and verify complete QUEUE_PUBLISH_FAILURE response">
+
+    <munit:behavior>
+
+        <munit-tools:mock-when
+            doc:name="Mock AMQP Connectivity Failure"
+            processor="amqp:publish">
+
+            <munit-tools:with-attributes>
+                <munit-tools:with-attribute
+                    attributeName="doc:name"
+                    whereValue="#['Publish to order.commands']"/>
+            </munit-tools:with-attributes>
+
+            <munit-tools:then-return>
+                <munit-tools:error
+                    typeId="AMQP:CONNECTIVITY"/>
+            </munit-tools:then-return>
+
+        </munit-tools:mock-when>
+
+    </munit:behavior>
+
+    <munit:execution>
+
+        <munit:set-event doc:name="Set AMQP Connectivity Failure Event">
+
+            <munit:payload
+                mediaType="application/java"
+                value="#[{
+                    customerId: 'CUST-015',
+                    customerName: 'Queue Failure Customer',
+                    customerEmail: 'queue.failure@example.com',
+                    orderDate: '2026-10-11',
+                    productCode: 'PROD-015',
+                    quantity: 1,
+                    unitPrice: 299.00,
+                    currency: 'USD',
+                    shippingAddressLine1: '500 Queue Street',
+                    shippingAddressLine2: null,
+                    shippingCity: 'Boston',
+                    shippingState: 'MA',
+                    shippingPostalCode: '02101',
+                    shippingCountry: 'US'
+                }]"/>
+
+            <munit:attributes
+                mediaType="application/java"
+                value="#[{
+                    headers: {
+                        'x-correlation-id': 'corr-amqp-failure-001',
+                        'content-type': 'application/json'
+                    },
+                    uriParams: {},
+                    queryParams: {}
+                }]"/>
+
+            <munit:variables>
+
+                <munit:variable
+                    key="correlationId"
+                    value="#['corr-amqp-failure-001']"/>
+
+            </munit:variables>
+
+        </munit:set-event>
+
+        <!--
+            The POST implementation flow does not directly reference
+            globalErrorHandler. The inner try attaches the real production
+            globalErrorHandler to the POST flow invocation.
+        -->
+        <try doc:name="Execute POST With Global Error Handler">
+
+            <try doc:name="Invoke POST Implementation Flow">
+
+                <flow-ref
+                    name="post:\api\orders:application\json:OrderExperienceApiConfig"
+                    doc:name="Invoke POST Order Flow"/>
+
+                <error-handler ref="globalErrorHandler"/>
+
+            </try>
+
+            <!--
+                The production global handler uses on-error-propagate.
+                This outer handler consumes that propagated error only
+                after the production transformation has executed.
+            -->
+            <error-handler>
+
+                <on-error-continue
+                    type="AMQP:CONNECTIVITY"
+                    doc:name="Capture AMQP Connectivity Error"/>
+
+            </error-handler>
+
+        </try>
+
+    </munit:execution>
+
+    <munit:validation>
+
+        <munit-tools:assert-that
+            doc:name="Assert Correlation ID"
+            expression="#[payload.correlationId]"
+            is="#[MunitTools::equalTo('corr-amqp-failure-001')]"
+            message="Queue failure response must preserve correlationId"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert Order ID Is Null"
+            expression="#[payload.orderId]"
+            is="#[MunitTools::nullValue()]"
+            message="orderId must be null because POST input did not provide orderId"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert Queue Failure Error Code"
+            expression="#[payload.errorCode]"
+            is="#[MunitTools::equalTo('QUEUE_PUBLISH_FAILURE')]"
+            message="errorCode must be QUEUE_PUBLISH_FAILURE"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert Queue Failure Message"
+            expression="#[payload.errorMessage]"
+            is="#[MunitTools::equalTo('Failed to publish message to command queue. Please try again later.')]"
+            message="errorMessage must match the global error-handler output"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert Error Source"
+            expression="#[payload.source]"
+            is="#[MunitTools::equalTo('EAPI')]"
+            message="Error source must be EAPI"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert Error Timestamp Exists"
+            expression="#[payload.timestamp]"
+            is="#[MunitTools::notNullValue()]"
+            message="Queue failure response must contain timestamp"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert HTTP Status 500"
+            expression="#[vars.httpStatus]"
+            is="#[MunitTools::equalTo(500)]"
+            message="vars.httpStatus must be 500"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert Correlation ID Variable"
+            expression="#[vars.correlationId]"
+            is="#[MunitTools::equalTo('corr-amqp-failure-001')]"
+            message="vars.correlationId must retain the supplied value"/>
+
+        <munit-tools:verify-call
+            doc:name="Verify AMQP Publish Attempted Once"
+            processor="amqp:publish"
+            times="1">
+
+            <munit-tools:with-attributes>
+                <munit-tools:with-attribute
+                    attributeName="doc:name"
+                    whereValue="#['Publish to order.commands']"/>
+            </munit-tools:with-attributes>
+
+        </munit-tools:verify-call>
+
+    </munit:validation>
+
+</munit:test>
+<!-- TC-16: Cover ANY catch-all branch in globalErrorHandler -->
+<munit:test
+    name="TC-16-post-any-catch-all-error-test"
+    description="Cover the ANY catch-all branch and verify the complete INTERNAL_SERVER_ERROR response">
+
+    <munit:behavior>
+
+        <munit-tools:mock-when
+            doc:name="Mock Unexpected AMQP Error"
+            processor="amqp:publish">
+
+            <munit-tools:with-attributes>
+                <munit-tools:with-attribute
+                    attributeName="doc:name"
+                    whereValue="#['Publish to order.commands']"/>
+            </munit-tools:with-attributes>
+
+            <munit-tools:then-return>
+                <munit-tools:error typeId="MULE:UNKNOWN"/>
+            </munit-tools:then-return>
+
+        </munit-tools:mock-when>
+
+    </munit:behavior>
+
+    <munit:execution>
+
+        <munit:set-event doc:name="Set Unexpected Error POST Event">
+
+            <munit:payload
+                mediaType="application/java"
+                value="#[{
+                    customerId: 'CUST-016',
+                    customerName: 'Unexpected Error Customer',
+                    customerEmail: 'unexpected.error@example.com',
+                    orderDate: '2026-10-11',
+                    productCode: 'PROD-016',
+                    quantity: 1,
+                    unitPrice: 150.00,
+                    currency: 'USD',
+                    shippingAddressLine1: '160 Error Street',
+                    shippingAddressLine2: null,
+                    shippingCity: 'New York',
+                    shippingState: 'NY',
+                    shippingPostalCode: '10001',
+                    shippingCountry: 'US'
+                }]"/>
+
+            <munit:attributes
+                mediaType="application/java"
+                value="#[{
+                    headers: {
+                        'x-correlation-id': 'corr-any-error-001',
+                        'content-type': 'application/json'
+                    },
+                    uriParams: {},
+                    queryParams: {}
+                }]"/>
+
+            <munit:variables>
+                <munit:variable
+                    key="correlationId"
+                    value="#['corr-any-error-001']"/>
+            </munit:variables>
+
+        </munit:set-event>
+
+        <!--
+            The inner try attaches the production globalErrorHandler
+            to the directly invoked POST implementation flow.
+        -->
+        <try doc:name="Execute POST With Global Error Handler">
+
+            <try doc:name="Invoke POST Implementation Flow">
+
+                <flow-ref
+                    name="post:\api\orders:application\json:OrderExperienceApiConfig"
+                    doc:name="Invoke POST Order Flow"/>
+
+                <error-handler ref="globalErrorHandler"/>
+
+            </try>
+
+            <!--
+                The production ANY handler uses on-error-propagate.
+                This outer handler consumes the propagated MULE:UNKNOWN error
+                after the production error response has been created.
+            -->
+            <error-handler>
+
+                <on-error-continue
+                    type="MULE:UNKNOWN"
+                    doc:name="Capture Propagated Unexpected Error"/>
+
+            </error-handler>
+
+        </try>
+
+    </munit:execution>
+
+    <munit:validation>
+
+        <munit-tools:assert-that
+            doc:name="Assert Internal Server Error Code"
+            expression="#[payload.errorCode]"
+            is="#[MunitTools::equalTo('INTERNAL_SERVER_ERROR')]"
+            message="errorCode must be INTERNAL_SERVER_ERROR"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert Error Message Exists"
+            expression="#[payload.errorMessage]"
+            is="#[MunitTools::notNullValue()]"
+            message="Catch-all response must contain errorMessage"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert Error Source"
+            expression="#[payload.source]"
+            is="#[MunitTools::equalTo('EAPI')]"
+            message="Error source must be EAPI"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert Error Correlation ID"
+            expression="#[payload.correlationId]"
+            is="#[MunitTools::equalTo('corr-any-error-001')]"
+            message="Catch-all response must preserve correlationId"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert Order ID Is Null"
+            expression="#[payload.orderId]"
+            is="#[MunitTools::nullValue()]"
+            message="orderId must be null because the POST request contains no orderId"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert Error Timestamp Exists"
+            expression="#[payload.timestamp]"
+            is="#[MunitTools::notNullValue()]"
+            message="Catch-all response must contain timestamp"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert HTTP Status 500"
+            expression="#[vars.httpStatus]"
+            is="#[MunitTools::equalTo(500)]"
+            message="vars.httpStatus must be 500"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert Correlation ID Variable"
+            expression="#[vars.correlationId]"
+            is="#[MunitTools::equalTo('corr-any-error-001')]"
+            message="vars.correlationId must retain the supplied value"/>
+
+        <munit-tools:verify-call
+            doc:name="Verify AMQP Publish Attempted Once"
+            processor="amqp:publish"
+            times="1">
+
+            <munit-tools:with-attributes>
+                <munit-tools:with-attribute
+                    attributeName="doc:name"
+                    whereValue="#['Publish to order.commands']"/>
+            </munit-tools:with-attributes>
+
+        </munit-tools:verify-call>
+
+    </munit:validation>
+
+</munit:test>
+<!-- TC-17: Cover UUID generation when x-correlation-id header is absent -->
+<munit:test
+    name="TC-17-main-flow-generated-correlationid-test"
+    description="Verify ordersEapiMainFlow generates a non-empty correlationId when x-correlation-id header is absent">
+
+    <munit:behavior>
+
+        <munit-tools:mock-when
+            doc:name="Mock APIKit Router"
+            processor="apikit:router">
+
+            <munit-tools:with-attributes>
+                <munit-tools:with-attribute
+                    attributeName="config-ref"
+                    whereValue="#['OrderExperienceApiConfig']"/>
+            </munit-tools:with-attributes>
+
+            <munit-tools:then-return/>
+
+        </munit-tools:mock-when>
+
+    </munit:behavior>
+
+    <munit:execution>
+
+        <munit:set-event doc:name="Set Main Flow Event Without Correlation Header">
+
+            <munit:payload
+                mediaType="application/java"
+                value="#[{}]"/>
+
+            <munit:attributes
+                mediaType="application/java"
+                value="#[{
+                    headers: {
+                        'content-type': 'application/json'
+                    },
+                    uriParams: {},
+                    queryParams: {},
+                    method: 'POST',
+                    requestPath: '/api/orders',
+                    relativePath: '/api/orders',
+                    listenerPath: '/*'
+                }]"/>
+
+        </munit:set-event>
+
+        <flow-ref
+            name="ordersEapiMainFlow"
+            doc:name="Invoke ordersEapiMainFlow"/>
+
+    </munit:execution>
+
+    <munit:validation>
+
+        <munit-tools:assert-that
+            doc:name="Assert Generated Correlation ID Is Not Null"
+            expression="#[vars.correlationId]"
+            is="#[MunitTools::notNullValue()]"
+            message="vars.correlationId must be generated when x-correlation-id is absent"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert Generated Correlation ID Is Not Empty"
+            expression="#[sizeOf(vars.correlationId as String) &gt; 0]"
+            is="#[MunitTools::equalTo(true)]"
+            message="Generated correlationId must not be empty"/>
+
+        <munit-tools:assert-that
+            doc:name="Assert Generated Correlation ID Has UUID Format"
+            expression="#[(vars.correlationId as String) matches /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/]"
+            is="#[MunitTools::equalTo(true)]"
+            message="Generated correlationId must have a valid UUID format"/>
+
+        <munit-tools:verify-call
+            doc:name="Verify APIKit Router Called Once"
+            processor="apikit:router"
+            times="1">
+
+            <munit-tools:with-attributes>
+                <munit-tools:with-attribute
+                    attributeName="config-ref"
+                    whereValue="#['OrderExperienceApiConfig']"/>
+            </munit-tools:with-attributes>
+
+        </munit-tools:verify-call>
+
+    </munit:validation>
+
+</munit:test>
+
+</mule>

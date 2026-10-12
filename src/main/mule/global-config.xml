@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core" 
+      xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit"
+      xmlns:amqp="http://www.mulesoft.org/schema/mule/amqp" 
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" 
+      xmlns:http="http://www.mulesoft.org/schema/mule/http" 
+      xmlns:secure-properties="http://www.mulesoft.org/schema/mule/secure-properties" 
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+      xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+      http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd
+      http://www.mulesoft.org/schema/mule/secure-properties http://www.mulesoft.org/schema/mule/secure-properties/current/mule-secure-properties.xsd
+      http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+      http://www.mulesoft.org/schema/mule/amqp http://www.mulesoft.org/schema/mule/amqp/current/mule-amqp.xsd">
+
+    <configuration-properties doc:name="Configuration properties" doc:id="4e7fc8ef-c175-4ce5-ae4f-4d3a59edd571" file="config/config-dev.yaml" />
+    
+    <secure-properties:config name="Secure_Properties_Config" doc:name="Secure Properties Config" doc:id="c722d16f-c49d-4708-94c0-28ef9b10aabf" file="config/secure-dev.yaml" key="${runtime.key}" >
+        <secure-properties:encrypt algorithm="Blowfish" />
+    </secure-properties:config>
+
+    <http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="4969a13a-cda5-4f7e-b100-67376a71fee2" >
+        <http:listener-connection host="0.0.0.0" port="8085" />
+    </http:listener-config>
+
+    <apikit:config name="OrderExperienceApiConfig" api="resource::78f0de6c-2145-4f67-a668-6768c0d01c87:order-experience-api-spec:1.0.0:raml:zip:order-experience-api-spec.raml" outboundHeadersMapName="outboundHeaders" httpStatusVarName="httpStatus" />
+
+    <amqp:config name="AMQP_Config" doc:name="AMQP Config" doc:id="6f5ea6fc-fb4e-48f6-acc7-0c369f9317e1" >
+        <amqp:connection host="${amqp.host}" port="${amqp.port}" virtualHost="${amqp.virtualHost}" username="${amqp.username}" password="${secure::amqp.password}" useTls="true" />
+    </amqp:config>
+
+    <configuration doc:name="Configuration" doc:id="c1735d90-14ee-40fd-baa2-aab58a7e2602" defaultErrorHandler-ref="globalErrorHandler" />
+
+</mule>

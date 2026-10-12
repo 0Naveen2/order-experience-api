@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="
+		http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+		http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+
+	<error-handler name="globalErrorHandler">
+		
+		<!-- 400 Bad Request -->
+		<on-error-propagate type="APIKIT:BAD_REQUEST" enableNotifications="true" logException="true">
+			<ee:transform doc:name="Transform Bad Request Error">
+				<ee:message>
+					<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  correlationId: vars.correlationId default attributes.headers['x-correlation-id'] default "UNKNOWN",
+  orderId: vars.orderId default null,
+  errorCode: "BAD_REQUEST",
+  errorMessage: error.description default "The request payload or parameter validation failed.",
+  source: "EAPI",
+  timestamp: now()
+}]]></ee:set-payload>
+				</ee:message>
+				<ee:variables>
+					<ee:set-variable variableName="httpStatus"><![CDATA[400]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+		</on-error-propagate>
+
+		<!-- 404 Not Found -->
+		<on-error-propagate type="APIKIT:NOT_FOUND" enableNotifications="true" logException="true">
+			<ee:transform doc:name="Transform Resource Not Found Error">
+				<ee:message>
+					<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  correlationId: vars.correlationId default attributes.headers['x-correlation-id'] default "UNKNOWN",
+  orderId: vars.orderId default null,
+  errorCode: "RESOURCE_NOT_FOUND",
+  errorMessage: "The requested URI or resource does not exist.",
+  source: "EAPI",
+  timestamp: now()
+}]]></ee:set-payload>
+				</ee:message>
+				<ee:variables>
+					<ee:set-variable variableName="httpStatus"><![CDATA[404]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+		</on-error-propagate>
+
+		<!-- 405 Method Not Allowed -->
+		<on-error-propagate type="APIKIT:METHOD_NOT_ALLOWED" enableNotifications="true" logException="true">
+			<ee:transform doc:name="Transform Method Not Allowed Error">
+				<ee:message>
+					<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  correlationId: vars.correlationId default attributes.headers['x-correlation-id'] default "UNKNOWN",
+  orderId: vars.orderId default null,
+  errorCode: "METHOD_NOT_ALLOWED",
+  errorMessage: "HTTP method is not allowed on this endpoint.",
+  source: "EAPI",
+  timestamp: now()
+}]]></ee:set-payload>
+				</ee:message>
+				<ee:variables>
+					<ee:set-variable variableName="httpStatus"><![CDATA[405]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+		</on-error-propagate>
+
+		<!-- 415 Unsupported Media Type -->
+		<on-error-propagate type="APIKIT:UNSUPPORTED_MEDIA_TYPE" enableNotifications="true" logException="true">
+			<ee:transform doc:name="Transform Unsupported Media Type Error">
+				<ee:message>
+					<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  correlationId: vars.correlationId default attributes.headers['x-correlation-id'] default "UNKNOWN",
+  orderId: vars.orderId default null,
+  errorCode: "UNSUPPORTED_MEDIA_TYPE",
+  errorMessage: "Content-Type is not supported. Please use application/json.",
+  source: "EAPI",
+  timestamp: now()
+}]]></ee:set-payload>
+				</ee:message>
+				<ee:variables>
+					<ee:set-variable variableName="httpStatus"><![CDATA[415]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+		</on-error-propagate>
+
+		<!-- 500 Queue Publishing Failure -->
+		<on-error-propagate type="AMQP:CONNECTIVITY, AMQP:PUBLISHING" enableNotifications="true" logException="true">
+			<ee:transform doc:name="Transform Queue Publish Failure Error">
+				<ee:message>
+					<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  correlationId: vars.correlationId default attributes.headers['x-correlation-id'] default "UNKNOWN",
+  orderId: vars.orderId default null,
+  errorCode: "QUEUE_PUBLISH_FAILURE",
+  errorMessage: "Failed to publish message to command queue. Please try again later.",
+  source: "EAPI",
+  timestamp: now()
+}]]></ee:set-payload>
+				</ee:message>
+				<ee:variables>
+					<ee:set-variable variableName="httpStatus"><![CDATA[500]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+		</on-error-propagate>
+
+		<!-- 500 Catch-All Technical Failure -->
+		<on-error-propagate type="ANY" enableNotifications="true" logException="true">
+			<ee:transform doc:name="Transform Internal Server Error">
+				<ee:message>
+					<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  correlationId: vars.correlationId default attributes.headers['x-correlation-id'] default "UNKNOWN",
+  orderId: vars.orderId default null,
+  errorCode: "INTERNAL_SERVER_ERROR",
+  errorMessage: error.description default "An unexpected technical error occurred.",
+  source: "EAPI",
+  timestamp: now()
+}]]></ee:set-payload>
+				</ee:message>
+				<ee:variables>
+					<ee:set-variable variableName="httpStatus"><![CDATA[500]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+		</on-error-propagate>
+
+	</error-handler>
+
+</mule>

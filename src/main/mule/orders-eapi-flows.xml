@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:amqp="http://www.mulesoft.org/schema/mule/amqp"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="
+		http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+		http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+		http://www.mulesoft.org/schema/mule/amqp http://www.mulesoft.org/schema/mule/amqp/current/mule-amqp.xsd">
+
+	<!-- 1. POST /api/orders (CREATE ORDER) -->
+	<flow name="post:\api\orders:application\json:OrderExperienceApiConfig">
+		<ee:transform doc:name="Build AMQP CREATE Command Payload">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  correlationId: vars.correlationId,
+  source: "API",
+  operation: "CREATE",
+  orderId: payload.orderId default null,
+  customerId: payload.customerId,
+  customerName: payload.customerName,
+  customerEmail: payload.customerEmail,
+  orderDate: payload.orderDate,
+  productCode: payload.productCode,
+  quantity: payload.quantity,
+  unitPrice: payload.unitPrice,
+  currency: payload.currency,
+  shippingAddressLine1: payload.shippingAddressLine1,
+  shippingAddressLine2: payload.shippingAddressLine2,
+  shippingCity: payload.shippingCity,
+  shippingState: payload.shippingState,
+  shippingPostalCode: payload.shippingPostalCode,
+  shippingCountry: payload.shippingCountry
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+
+		<amqp:publish config-ref="AMQP_Config" exchangeName="#['']" deliveryMode="PERSISTENT" doc:name="Publish to order.commands">
+			<amqp:routing-keys>
+				<amqp:routing-key value="${amqp.queue}" />
+			</amqp:routing-keys>
+		</amqp:publish>
+
+		<ee:transform doc:name="Set 202 Accepted Response">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  correlationId: vars.correlationId,
+  status: "ACCEPTED",
+  message: "Order creation request has been accepted"
+}]]></ee:set-payload>
+			</ee:message>
+			<ee:variables>
+				<ee:set-variable variableName="httpStatus"><![CDATA[202]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+	</flow>
+
+	<!-- 2. PUT /api/orders/{orderId} (UPDATE ORDER) -->
+	<flow name="put:\api\orders\(orderId):application\json:OrderExperienceApiConfig">
+		<set-variable value="#[attributes.uriParams.'orderId']" doc:name="Set orderId" variableName="orderId"/>
+
+		<logger level="INFO" doc:name="Logger" doc:id="1f4ea684-5832-44ab-a890-23baf803bc3a" message="#[payload]"/>
+		<ee:transform doc:name="Build AMQP UPDATE Command Payload">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  correlationId: vars.correlationId,
+  operation: "UPDATE",
+  orderId: vars.orderId,
+  customerName: payload.customerName,
+  customerEmail: payload.customerEmail,
+  quantity: if (payload.quantity != null) payload.quantity as Number else null,
+  unitPrice: payload.unitPrice,
+  shippingAddressLine1: payload.shippingAddressLine1,
+  shippingAddressLine2: payload.shippingAddressLine2,
+  shippingCity: payload.shippingCity,
+  shippingState: payload.shippingState,
+  shippingPostalCode: payload.shippingPostalCode,
+  shippingCountry: payload.shippingCountry
+} filterObject ((value) -> value != null)]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<amqp:publish config-ref="AMQP_Config" exchangeName="#['']" deliveryMode="PERSISTENT" doc:name="Publish to order.commands">
+			<amqp:routing-keys>
+				<amqp:routing-key value="${amqp.queue}" />
+			</amqp:routing-keys>
+		</amqp:publish>
+
+		<ee:transform doc:name="Set 202 Accepted Response">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  correlationId: vars.correlationId,
+  orderId: vars.orderId,
+  status: "ACCEPTED",
+  message: "Order update request has been accepted"
+}]]></ee:set-payload>
+			</ee:message>
+			<ee:variables>
+				<ee:set-variable variableName="httpStatus"><![CDATA[202]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+	</flow>
+
+	<!-- 3. DELETE /api/orders/{orderId} (DELETE ORDER) -->
+	<flow name="delete:\api\orders\(orderId):OrderExperienceApiConfig">
+		<set-variable value="#[attributes.uriParams.'orderId']" doc:name="Set orderId" variableName="orderId"/>
+
+		<ee:transform doc:name="Build AMQP DELETE Command Payload">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  correlationId: vars.correlationId,
+  operation: "DELETE",
+  orderId: vars.orderId,
+  customerEmail: attributes.headers['customerEmail'] default attributes.queryParams.customerEmail default payload.customerEmail default null,
+  customerName: attributes.headers['customerName'] default attributes.queryParams.customerName default payload.customerName default null
+} filterObject ((value) -> value != null)]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+
+		<amqp:publish config-ref="AMQP_Config" exchangeName="#['']" deliveryMode="PERSISTENT" doc:name="Publish to order.commands">
+			<amqp:routing-keys>
+				<amqp:routing-key value="${amqp.queue}" />
+			</amqp:routing-keys>
+		</amqp:publish>
+
+		<ee:transform doc:name="Set 202 Accepted Response">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  correlationId: vars.correlationId,
+  orderId: vars.orderId,
+  status: "ACCEPTED",
+  message: "Order deletion request has been accepted"
+}]]></ee:set-payload>
+			</ee:message>
+			<ee:variables>
+				<ee:set-variable variableName="httpStatus"><![CDATA[202]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+	</flow>
+
+</mule>
