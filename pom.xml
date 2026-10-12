@@ -60,7 +60,7 @@
             <skipDeploymentVerification>false</skipDeploymentVerification>
 
             <properties>
-                <secure.key>${runtime.key}</secure.key>
+                <runtime.key>${runtime.key}</runtime.key>
                 <env>${anypoint.environment}</env>
             </properties>
         </cloudhub2Deployment>
