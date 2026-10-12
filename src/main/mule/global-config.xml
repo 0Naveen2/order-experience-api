@@ -1,16 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<mule xmlns="http://www.mulesoft.org/schema/mule/core" 
-      xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit"
+<mule xmlns:api-gateway="http://www.mulesoft.org/schema/mule/api-gateway" 
+      xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit" 
       xmlns:amqp="http://www.mulesoft.org/schema/mule/amqp" 
       xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" 
       xmlns:http="http://www.mulesoft.org/schema/mule/http" 
       xmlns:secure-properties="http://www.mulesoft.org/schema/mule/secure-properties" 
-      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
-      xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
       http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd
       http://www.mulesoft.org/schema/mule/secure-properties http://www.mulesoft.org/schema/mule/secure-properties/current/mule-secure-properties.xsd
       http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
-      http://www.mulesoft.org/schema/mule/amqp http://www.mulesoft.org/schema/mule/amqp/current/mule-amqp.xsd">
+      http://www.mulesoft.org/schema/mule/amqp http://www.mulesoft.org/schema/mule/amqp/current/mule-amqp.xsd
+http://www.mulesoft.org/schema/mule/api-gateway http://www.mulesoft.org/schema/mule/api-gateway/current/mule-api-gateway.xsd">
 
     <configuration-properties doc:name="Configuration properties" doc:id="4e7fc8ef-c175-4ce5-ae4f-4d3a59edd571" file="config/config-dev.yaml" />
     
@@ -29,5 +30,7 @@
     </amqp:config>
 
     <configuration doc:name="Configuration" doc:id="c1735d90-14ee-40fd-baa2-aab58a7e2602" defaultErrorHandler-ref="globalErrorHandler" />
+	<api-gateway:autodiscovery apiId="21230309" ignoreBasePath="true" doc:name="API Autodiscovery" doc:id="8fbd21bf-d548-4068-a9ae-d7c77113b8ad" flowRef="ordersEapiMainFlow" />
+
 
 </mule>

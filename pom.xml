@@ -58,11 +58,14 @@
             <replicas>1</replicas>
             <vCores>0.1</vCores>
             <skipDeploymentVerification>false</skipDeploymentVerification>
-
             <properties>
-                <runtime.key>${runtime.key}</runtime.key>
-                <env>${anypoint.environment}</env>
-            </properties>
+    			<runtime.key>${runtime.key}</runtime.key>
+   				<env>${anypoint.environment}</env>
+
+    			<anypoint.platform.client_id>${env.CONNECTED_APP_CLIENT_ID}</anypoint.platform.client_id>
+    			<anypoint.platform.client_secret>${env.CONNECTED_APP_CLIENT_SECRET}</anypoint.platform.client_secret>
+			</properties>
+            
         </cloudhub2Deployment>
     </configuration>
 </plugin>
