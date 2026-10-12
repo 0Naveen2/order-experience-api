@@ -52,7 +52,7 @@ jobs:
           CONNECTED_APP_CLIENT_ID: ${{ secrets.ANYPOINT_CLIENT_ID }}
           CONNECTED_APP_CLIENT_SECRET: ${{ secrets.ANYPOINT_CLIENT_SECRET }}
 
-       - name: Package Application
+      - name: Package Application
         run: |
           mvn package \
             -DskipMunitTests \
