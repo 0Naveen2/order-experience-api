@@ -19,7 +19,7 @@
     </secure-properties:config>
 
     <http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="4969a13a-cda5-4f7e-b100-67376a71fee2" >
-        <http:listener-connection host="0.0.0.0" port="8085" />
+        <http:listener-connection host="0.0.0.0" port="${http.port}" />
     </http:listener-config>
 
     <apikit:config name="OrderExperienceApiConfig" api="resource::78f0de6c-2145-4f67-a668-6768c0d01c87:order-experience-api-spec:1.0.0:raml:zip:order-experience-api-spec.raml" outboundHeadersMapName="outboundHeaders" httpStatusVarName="httpStatus" />

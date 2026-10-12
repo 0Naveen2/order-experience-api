@@ -4,3 +4,6 @@ amqp:
   virtualHost: "sgvymzpq"
   username: "sgvymzpq"
   queue: "order.commands"
+  
+http:
+  port: "8085"
